@@ -1,0 +1,2 @@
+site_id,date,n_hour_daylight,solar_daylight_mean,solar_daylight_sum,solar_daylight_max,n_DO_WT_daylight,r_DO_WT_daylight,p_DO_WT_daylight
+3650,2022-01-02,3,0.49333333333333335,1.48,1.02,3,0.3523096927441712,0.7707927613827331

@@ -1,0 +1,3 @@
+site_id,date,n_hour_daylight,solar_daylight_mean,solar_daylight_sum,solar_daylight_max,n_DO_WT_daylight,r_DO_WT_daylight,p_DO_WT_daylight
+3775,2021-10-15,3,0.5333333333333333,1.6,0.91,3,0.4388558658201907,0.7107677373094197
+3775,2021-10-16,3,0.7200000000000001,2.16,1.36,3,0.7696957470793538,0.44081583261850366

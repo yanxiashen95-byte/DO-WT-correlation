@@ -1,0 +1,3 @@
+site_id,date,n_hour_daylight,solar_daylight_mean,solar_daylight_sum,solar_daylight_max,n_DO_WT_daylight,r_DO_WT_daylight,p_DO_WT_daylight
+2433,2022-06-21,3,1.04,3.12,1.61,3,0.8170571691028894,0.3912079900317165
+2433,2022-06-22,3,0.5833333333333333,1.75,0.96,3,-0.5960395606792727,0.5934802716263372

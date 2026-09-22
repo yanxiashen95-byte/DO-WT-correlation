@@ -1,0 +1,3 @@
+station_id,date,period,n,r,p,slope,discharge,flow_exceed_prob,flow_exceed_prob_smooth,flow_season,source_file
+9085160,2024-10-31,daytime,6,0.8307221127533133,0.0405571754732395,0.5134279024927882,NA,NA,NA,NA,NA
+9085160,2024-10-31,nighttime,6,NA,NA,2.5470250873954448e-14,NA,NA,NA,NA,NA
