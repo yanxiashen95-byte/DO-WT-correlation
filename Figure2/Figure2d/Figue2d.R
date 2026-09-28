@@ -55,7 +55,8 @@ p <- ggplot(
 # ==========================================================
 geom_density(
   linewidth = 1.8,
-  adjust = 1
+  adjust = 1,
+  key_glyph = "path"
 ) +
   
   # ==========================================================
@@ -77,9 +78,9 @@ geom_vline(
 # ==========================================================
 scale_color_manual(
   values = c(
-    "Low-flow" = "#2C7FB8",
-    "Normal-flow" = "#31A354",
-    "High-flow" = "#F28E2B"
+    "Low-flow" = "#c2a5cf",
+    "Normal-flow" = "#8dd3c7",
+    "High-flow" = "#fb8072"
   )
 ) +
   
@@ -114,7 +115,7 @@ scale_linetype_manual(
   theme_classic(base_size = 14) +
   
   theme(
-    legend.position = "bottom",
+    legend.position = "right",
     
     legend.text = element_text(
       size = 23
