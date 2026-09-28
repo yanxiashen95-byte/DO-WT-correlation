@@ -14,7 +14,7 @@ suppressPackageStartupMessages({
 # 1. Paths
 # ============================================================
 
-out_dir <- "D:/Python/R/6 DO-WT/revised_Figure4/拆分WT和solar/DO_WT_decomposition_output"
+out_dir <- "D:/Python/R/6 DO-WT/需要上传的数据和代码/Figure4/Figure4d"
 
 decomp_path <- file.path(out_dir, "site_DO_WT_decomposition_all_hours.csv")
 
@@ -57,9 +57,9 @@ slope_long_all <- site_decomp_all %>%
       component,
       levels = c("beta_sat", "beta_exc", "beta_obs"),
       labels = c(
-        "Solubility\ncomponent",
-        "Non-solubility\n-related DO",
-        "Observed\nDO response"
+        "Solubility-related\nDO change",
+        "Non-solubility \nrelated DO change",
+        "Observed\nDO change"
       )
     )
   ) %>%
@@ -88,7 +88,7 @@ theme_pub <- function(base_size = 14) {
 
 # ----------------------------
 
-box_fill_color <- "#6BA3D6"   # 盒子蓝色，可改成 "#2C7FB8"
+box_fill_color <- "#CFC3D6"   # 盒子蓝色，可改成 "#2C7FB8"
 
 # 纵坐标范围
 # 设为 NULL 就自动按数据范围显示
@@ -100,9 +100,9 @@ y_lim_manual <- c(-0.5, 2)
 y_breaks_manual <- seq(-0.5, 2, by = 0.5)
 
 # 字体大小
-x_text_size <- 18
-y_text_size <- 18
-y_title_size <- 18
+x_text_size <- 16
+y_text_size <- 16
+y_title_size <- 16
 
 # 横坐标文字角度
 x_text_angle <- 0
