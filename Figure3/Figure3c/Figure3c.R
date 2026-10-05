@@ -97,6 +97,88 @@ summary_table <- plot_data %>%
     .groups = "drop"
   )
 
+# ============================================================
+# 1. 按站点、日期和流量组匹配昼夜记录
+# ============================================================
+
+daily_pairs <- plot_data %>%
+  group_by(station_id, date, flow_group, period_group) %>%
+  summarise(
+    r = median(r, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(
+    names_from = period_group,
+    values_from = r
+  ) %>%
+  filter(
+    is.finite(Daytime),
+    is.finite(Nighttime)
+  )
+
+# 每站在各流量组内的中位数，使用相同的配对日期
+station_pairs <- daily_pairs %>%
+  group_by(station_id, flow_group) %>%
+  summarise(
+    r_day = median(Daytime),
+    r_night = median(Nighttime),
+    n_paired_days = n(),
+    .groups = "drop"
+  )
+
+# ============================================================
+# 2. 各流量组的双侧配对 Wilcoxon 检验
+# ============================================================
+
+sig_df <- station_pairs %>%
+  group_by(flow_group) %>%
+  summarise(
+    n_pairs = n(),
+    p = {
+      if (n() < 2) {
+        NA_real_
+      } else if (all(r_day == r_night)) {
+        1
+      } else {
+        wilcox.test(
+          r_day,
+          r_night,
+          paired = TRUE,
+          alternative = "two.sided",
+          exact = FALSE,
+          correct = TRUE
+        )$p.value
+      }
+    },
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_adj = p.adjust(p, method = "BH"),
+    sig_label = case_when(
+      is.na(p_adj)   ~ "NA",
+      p_adj < 0.001  ~ "***",
+      p_adj < 0.01   ~ "**",
+      p_adj < 0.05   ~ "*",
+      TRUE           ~ "ns"
+    ),
+    
+    # 与 position_dodge(width = 0.75) 的盒子中心一致
+    x_center = as.numeric(flow_group),
+    x1 = x_center - 0.75 / 4,
+    x2 = x_center + 0.75 / 4,
+    
+    # 图框上缘为 1.24，括号放在框外
+    y = 1.34,
+    y_tip = 1.25,
+    star_y = 1.26
+  )
+
+print(sig_df)
+
+# ============================================================
+# 3. 绘图
+# ============================================================
+
 p_box <- ggplot(
   plot_data,
   aes(x = flow_group, y = r, fill = period_group)
@@ -113,6 +195,45 @@ p_box <- ggplot(
     outlier.shape = NA,
     linewidth = 0.7
   ) +
+  
+  # 显著性括号横线
+  geom_segment(
+    data = sig_df,
+    aes(x = x1, xend = x2, y = y, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  
+  # 左侧竖线
+  geom_segment(
+    data = sig_df,
+    aes(x = x1, xend = x1, y = y_tip, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  
+  # 右侧竖线
+  geom_segment(
+    data = sig_df,
+    aes(x = x2, xend = x2, y = y_tip, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  
+  # 星号
+  geom_text(
+    data = sig_df,
+    aes(x = x_center, y = star_y, label = sig_label),
+    inherit.aes = FALSE,
+    size = 7,
+    fontface = "bold",
+    color = "black",
+    vjust = 0
+  ) +
+  
   scale_fill_manual(
     values = c(
       "Daytime" = "#fdae61",
@@ -120,9 +241,16 @@ p_box <- ggplot(
     )
   ) +
   scale_y_continuous(
-    limits = c(-1, 1),
-    breaks = seq(-1, 1, by = 0.5)
+    breaks = seq(-1, 1, by = 0.5),
+    expand = expansion(mult = c(0.12, 0.12))
   ) +
+  
+  # 在这里控制范围，避免框外显著性标注被删除
+  coord_cartesian(
+    ylim = c(-1, 1),
+    clip = "off"
+  ) +
+  
   labs(
     x = NULL,
     y = "DO–WT correlation",
@@ -132,30 +260,29 @@ p_box <- ggplot(
   theme(
     legend.position = "top",
     legend.text = element_text(size = 20),
-    axis.text.x = element_text(size = 20),
-    axis.text.y = element_text(size = 20),
+    
+    # 给图例与框外显著性括号留出距离
+    legend.box.spacing = grid::unit(1.2, "cm"),
+    
+    axis.text.x = element_text(size = 20, color = "black"),
+    axis.text.y = element_text(size = 20, color = "black"),
     axis.title.y = element_text(size = 20),
     panel.border = element_rect(
       color = "black",
       fill = NA,
-      linewidth = 0.8
+      linewidth = 0.5
     ),
-    axis.line = element_blank()
+    axis.line = element_blank(),
+    plot.margin = margin(t = 15, r = 10, b = 10, l = 10)
   )
 
 print(p_box)
 
 ggsave(
-  filename = file.path(out_dir, "boxplot_raw_daily_daynight_r_by_flow.png"),
+  filename = file.path(out_dir, "daynight_flow_significance.png"),
   plot = p_box,
   width = 6,
   height = 4.5,
-  dpi = 600
-)
-
-ggsave(
-  filename = file.path(out_dir, "boxplot_raw_daily_daynight_r_by_flow.pdf"),
-  plot = p_box,
-  width = 6.5,
-  height = 4.5
+  dpi = 600,
+  bg = "white"
 )
