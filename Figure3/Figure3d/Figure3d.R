@@ -169,6 +169,76 @@ write_csv(
 
 print(summary_table)
 
+# ============================================================
+# Paired day–night comparisons within each climate zone
+# Use station medians calculated from matched dates for inference.
+# Boxplots continue to show the original daily records.
+# ============================================================
+
+daily_pairs <- plot_data %>%
+  group_by(station_id, date, climate_zone, period_group) %>%
+  summarise(r = median(r, na.rm = TRUE), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = period_group,
+    values_from = r,
+    names_expand = TRUE
+  ) %>%
+  filter(is.finite(Daytime), is.finite(Nighttime))
+
+station_pairs <- daily_pairs %>%
+  group_by(station_id, climate_zone) %>%
+  summarise(
+    r_day = median(Daytime),
+    r_night = median(Nighttime),
+    n_paired_days = n(),
+    .groups = "drop"
+  )
+
+sig_df <- station_pairs %>%
+  group_by(climate_zone) %>%
+  summarise(
+    n_pairs = n(),
+    p = {
+      if (n() < 2) {
+        NA_real_
+      } else if (all(r_day == r_night)) {
+        1
+      } else {
+        wilcox.test(
+          r_day, r_night,
+          paired = TRUE,
+          alternative = "two.sided",
+          exact = FALSE,
+          correct = TRUE
+        )$p.value
+      }
+    },
+    .groups = "drop"
+  ) %>%
+  tidyr::complete(climate_zone, fill = list(n_pairs = 0L)) %>%
+  mutate(
+    p_adj = p.adjust(p, method = "BH"),
+    sig_label = case_when(
+      is.na(p_adj) ~ "NA",
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01 ~ "**",
+      p_adj < 0.05 ~ "*",
+      TRUE ~ ""
+    ),
+    x_center = as.numeric(climate_zone),
+    x1 = x_center - 0.75 / 4,
+    x2 = x_center + 0.75 / 4,
+    y = 1.34,
+    y_tip = 1.25,
+    star_y = 1.26
+  )
+
+print(sig_df)
+write_csv(
+  sig_df,
+  file.path(out_dir, "paired_wilcoxon_daynight_by_climate_zone.csv")
+)
+
 p_box <- ggplot(
   plot_data,
   aes(x = climate_zone, y = r, fill = period_group)
@@ -185,49 +255,74 @@ p_box <- ggplot(
     outlier.shape = NA,
     linewidth = 0.7
   ) +
+  geom_segment(
+    data = sig_df,
+    aes(x = x1, xend = x2, y = y, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  geom_segment(
+    data = sig_df,
+    aes(x = x1, xend = x1, y = y_tip, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  geom_segment(
+    data = sig_df,
+    aes(x = x2, xend = x2, y = y_tip, yend = y),
+    inherit.aes = FALSE,
+    linewidth = 0.8,
+    color = "black"
+  ) +
+  geom_text(
+    data = sig_df,
+    aes(x = x_center, y = star_y, label = sig_label),
+    inherit.aes = FALSE,
+    size = 7,
+    fontface = "bold",
+    color = "black",
+    vjust = 0
+  ) +
+  scale_x_discrete(drop = FALSE) +
   scale_fill_manual(
-    values = c(
-      "Daytime" = "#fdae61",
-      "Nighttime" = "#6BA3D6"
-    )
+    values = c("Daytime" = "#fdae61", "Nighttime" = "#6BA3D6")
   ) +
   scale_y_continuous(
-    limits = c(-1, 1),
-    breaks = seq(-1, 1, by = 0.5)
+    breaks = seq(-1, 1, by = 0.5),
+    expand = expansion(mult = c(0.12, 0.12))
   ) +
-  labs(
-    x = NULL,
-    y = "DO–WT correlation",
-    fill = NULL
-  ) +
+  coord_cartesian(ylim = c(-1, 1), clip = "off") +
+  labs(x = NULL, y = "DO–WT correlation", fill = NULL) +
   theme_classic(base_size = 14) +
   theme(
     legend.position = "top",
     legend.text = element_text(size = 21),
-    axis.text.x = element_text(size = 21),
-    axis.text.y = element_text(size = 21),
+    legend.box.spacing = grid::unit(1.2, "cm"),
+    axis.text.x = element_text(size = 21, color = "black"),
+    axis.text.y = element_text(size = 21, color = "black"),
     axis.title.y = element_text(size = 21),
-    panel.border = element_rect(
-      color = "black",
-      fill = NA,
-      linewidth = 0.8
-    ),
-    axis.line = element_blank()
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5),
+    axis.line = element_blank(),
+    plot.margin = margin(t = 15, r = 10, b = 10, l = 10)
   )
 
 print(p_box)
 
 ggsave(
-  filename = file.path(out_dir, "boxplot_daily_daynight_r_by_climate_zone.png"),
+  filename = "boxplot_daily_daynight_r_by_climate_zone.png",
   plot = p_box,
   width = 6,
   height = 4.5,
-  dpi = 600
+  dpi = 600,
+  bg = "white"
 )
 
 ggsave(
   filename = file.path(out_dir, "boxplot_daily_daynight_r_by_climate_zone.pdf"),
   plot = p_box,
   width = 6.5,
-  height = 4.5
+  height = 4.5,
+  bg = "white"
 )
