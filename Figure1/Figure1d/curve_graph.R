@@ -4,7 +4,7 @@ library(scales)
 library(readr)
 
 # === 读取数据（你实际的数据文件）===
-df <- read_csv("中国.csv") %>%
+df <- read_csv("奥地利.csv") %>%
   mutate(
     index = row_number(),
     # 自动识别时间格式（即便有秒、斜杠、横杠也能完美兼容，并截断到分钟）
@@ -37,6 +37,12 @@ range_WT <- range(df$WT, na.rm = TRUE)
 #)
 
 # ==== 绘图 ====
+# 当天零点
+day_start <- lubridate::floor_date(min(df$timestamp), unit = "day")
+
+# 固定刻度：00:00、06:00、12:00、18:00
+time_breaks <- day_start + lubridate::hours(c(0, 12, 24))
+
 ggplot(df, aes(x = timestamp)) +
   # 灰色夜间区块
   #geom_rect(
@@ -52,20 +58,21 @@ ggplot(df, aes(x = timestamp)) +
   
   scale_x_datetime(
     name = "",
-    date_breaks = "6 hours",
+    breaks = time_breaks,
     date_labels = "%H:%M",
-    expand = expansion(mult = c(0, 0))
+    expand = expansion(mult = c(0.12, 0.12))
   )  +
   scale_y_continuous(
     name = "DO (mg/L)",
-    breaks = pretty(range_DO, n = 5),
+    breaks = pretty(range_DO, n = 2),
+    expand = expansion(mult = c(0.12, 0.12)),
     sec.axis = sec_axis(
-      ~ rescale(., from = range_DO, to = range_WT),
+      ~ scales::rescale(., from = range_DO, to = range_WT),
       name = "WT (°C)",
-      breaks = pretty(range_WT, n = 5),
+      breaks = pretty(range_WT, n = 2),
       labels = function(x) format(x, nsmall = 1)
     )
-  ) +
+  )  +
   scale_color_manual(
     values = c("DO" = "#998ec3", "WT" = "#e08214"),
     labels = c("DO", "WT")
@@ -74,16 +81,16 @@ ggplot(df, aes(x = timestamp)) +
   theme(
     panel.grid = element_blank(),
     panel.border = element_rect(color = "black", size = 3),
-    axis.title.x = element_text(size = 40),
-    axis.text.x = element_text(size = 40, face = "bold"),
-    axis.title.y.left = element_text(color = "#998ec3", size = 40, face = "bold"),
-    axis.text.y.left = element_text(color = "#998ec3", size = 40, face = "bold"),
-    axis.title.y.right = element_text(color = "#e08214", size = 34, face = "bold"),
-    axis.text.y.right = element_text(color = "#e08214", size = 34, face = "bold"),
+    axis.title.x = element_text(size = 45),
+    axis.text.x = element_text(size = 45, face = "bold"),
+    axis.title.y.left = element_text(color = "#998ec3", size = 45, face = "bold"),
+    axis.text.y.left = element_text(color = "#998ec3", size = 45, face = "bold"),
+    axis.title.y.right = element_text(color = "#e08214", size = 45, face = "bold"),
+    axis.text.y.right = element_text(color = "#e08214", size = 45, face = "bold"),
     legend.position = "top",
     legend.text = element_text(size = 12),
     plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
   ) +
   labs(title = "DO and WT Time Series", color = NULL)
 
-ggsave("中国.png", width = 10, height = 8, dpi = 600, bg = "white")
+ggsave("奥地利.png", width = 12, height = 8, dpi = 600, bg = "white")

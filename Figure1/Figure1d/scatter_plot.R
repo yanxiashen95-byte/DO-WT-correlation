@@ -1,5 +1,5 @@
 
-data <- read_csv("中国.csv", show_col_types = FALSE)
+data <- read_csv("US.csv", show_col_types = FALSE)
 
 
 ggplot(data, aes(x = WT, y = DO)) +
@@ -13,6 +13,12 @@ ggplot(data, aes(x = WT, y = DO)) +
     x = "WT (°C)",
     y = "DO (mg/L)"
   ) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0.12, 0.12))
+  ) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0.12, 0.12))
+  ) +
   theme_minimal() +
   theme(
     panel.grid = element_blank(),
@@ -22,9 +28,9 @@ ggplot(data, aes(x = WT, y = DO)) +
       linewidth = 2
     ),
     axis.text = element_text(
-      size = 35,
+      size = 40,
       color = "black",
-      face = "bold"
+      #face = "bold"
     ),
     axis.ticks = element_line(
       color = "black",
@@ -32,18 +38,18 @@ ggplot(data, aes(x = WT, y = DO)) +
     ),
     axis.ticks.length = unit(0.25, "cm"),
     axis.title = element_text(
-      size = 35,
-      face = "bold"
+      size = 40,
+      #face = "bold"
     ),
     plot.title = element_text(
-      size = 35,
-      face = "bold",
+      size = 40,
+      #face = "bold",
       hjust = 0.5
     )
   )
 
 ggsave(
-  filename = "中国_散点图.png",  # 输出文件名
+  filename = "US_散点图.png",  # 输出文件名
   plot = last_plot(),                   # 或指定 plot = p，如果你存到了变量 p 中
   width = 12, height = 8,               # 单位：英寸（可以改大）
   dpi = 600                           # 分辨率：高清出版级                          # 背景白色（非透明）
