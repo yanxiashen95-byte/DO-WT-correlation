@@ -81,7 +81,7 @@ theme_pub <- function(base_size = 14) {
       plot.background = element_rect(fill = "white", color = NA),
       panel.background = element_rect(fill = "white", color = NA),
       plot.title = element_text(size = 18, face = "bold", hjust = 0),
-      plot.margin = margin(5, 5, 5, 5)
+      plot.margin = margin(t = 100, r = 10, b = 5, l = 5)
     )
 }
 
@@ -206,8 +206,16 @@ y_text_size <- 18
 y_title_size <- 19
 
 # ============================================================
-# 7. Common plotting function
+# 7. Common plotting function with pairwise significance
 # ============================================================
+
+# 与参考脚本一致的标注设置，可直接调整
+bracket_offset <- 0.06   # 第一层括号相对 y 轴上限的位置
+bracket_spacing <- 0.08  # 三层括号之间的距离
+bracket_tip <- 0.04      # 括号两端竖线长度
+star_offset <- -0.02    # 星号相对横括号的位置
+star_size <- 8           # 星号大小
+y_expand <- 0           # 与第二个文件一致；上下留 12% 时改为 0.12
 
 make_climate_boxplot <- function(
     data,
@@ -224,6 +232,63 @@ make_climate_boxplot <- function(
       is.finite(.data[[var]])
     )
   
+  # 每站每个参数只允许一条记录，避免重复站点被当成独立样本。
+  if (nrow(plot_data) == 0) stop(paste0(var, " 没有有效数据。"))
+  if (anyNA(plot_data$site_key) || any(plot_data$site_key == "")) {
+    stop("存在缺失站点 ID，请先检查 site_key。")
+  }
+  if (anyDuplicated(plot_data$site_key)) {
+    stop(paste0(var, " 中同一站点存在多条记录，请先确认每站唯一记录。"))
+  }
+
+  climate_levels <- c("Tropical", "Temperate", "Cold")
+  pairs <- combn(climate_levels, 2, simplify = FALSE)
+
+  # 不同气候区是独立站点，使用双侧非配对 Wilcoxon 秩和检验。
+  sig_results <- purrr::map_dfr(pairs, function(pair) {
+    x <- plot_data[[var]][as.character(plot_data$climate_zone) == pair[1]]
+    y <- plot_data[[var]][as.character(plot_data$climate_zone) == pair[2]]
+    p_val <- if (length(x) < 2 || length(y) < 2) {
+      NA_real_
+    } else if (length(unique(c(x, y))) == 1) {
+      1
+    } else {
+      wilcox.test(
+        x, y, paired = FALSE, alternative = "two.sided",
+        exact = FALSE, correct = TRUE
+      )$p.value
+    }
+    tibble(
+      parameter = var,
+      group1 = pair[1], group2 = pair[2],
+      n1 = length(x), n2 = length(y), p = p_val
+    )
+  }) %>%
+    mutate(
+      # 每张图内的三次比较分别进行 BH 校正。
+      p_adj = p.adjust(p, method = "BH"),
+      sig_label = case_when(
+        !is.finite(p_adj) ~ "NA",
+        p_adj < 0.001 ~ "***",
+        p_adj < 0.01 ~ "**",
+        p_adj < 0.05 ~ "*",
+        TRUE ~ ""
+      ),
+      x1 = match(group1, climate_levels),
+      x2 = match(group2, climate_levels)
+    ) %>%
+    arrange(x2 - x1, x1) %>%
+    mutate(level = row_number())
+
+  if (any(!is.finite(sig_results$p_adj))) {
+    warning(paste0(var, " 部分比较无法检验，标注为 NA；请检查各组有效站点数。"))
+  }
+  print(sig_results)
+  write_csv(
+    sig_results,
+    file.path(fig_dir, paste0(file_prefix, "_Wilcoxon_BH.csv"))
+  )
+
   if (is.null(ylim_manual)) {
     y_lim <- quantile(
       plot_data[[var]],
@@ -234,6 +299,17 @@ make_climate_boxplot <- function(
     y_lim <- ylim_manual
   }
   
+  y_span <- diff(y_lim)
+  if (length(y_lim) != 2 || any(!is.finite(y_lim)) || y_span <= 0) {
+    stop(paste0(var, " 的 y 轴范围必须是两个有限且递增的数值。"))
+  }
+  sig_results <- sig_results %>%
+    mutate(
+      y = y_lim[2] + (bracket_offset + (level - 1) * bracket_spacing) * y_span,
+      y_tip = y - bracket_tip * y_span,
+      star_y = y + star_offset * y_span
+    )
+
   p <- ggplot(
     plot_data,
     aes(x = climate_zone, y = .data[[var]], fill = climate_zone)
@@ -250,9 +326,33 @@ make_climate_boxplot <- function(
       linewidth = 0.75,
       alpha = 0.85
     ) +
+    geom_segment(
+      data = sig_results,
+      aes(x = x1, xend = x2, y = y, yend = y),
+      inherit.aes = FALSE, linewidth = 0.8, color = "black"
+    ) +
+    geom_segment(
+      data = sig_results,
+      aes(x = x1, xend = x1, y = y_tip, yend = y),
+      inherit.aes = FALSE, linewidth = 0.8, color = "black"
+    ) +
+    geom_segment(
+      data = sig_results,
+      aes(x = x2, xend = x2, y = y_tip, yend = y),
+      inherit.aes = FALSE, linewidth = 0.8, color = "black"
+    ) +
+    geom_text(
+      data = sig_results,
+      aes(x = (x1 + x2) / 2, y = star_y, label = sig_label),
+      inherit.aes = FALSE,
+      size = star_size, fontface = "bold", color = "black", vjust = 0
+    ) +
     scale_fill_manual(values = climate_cols, drop = FALSE) +
-    coord_cartesian(ylim = y_lim) +
-    scale_y_continuous(breaks = y_breaks) +
+    coord_cartesian(ylim = y_lim, clip = "off") +
+    scale_y_continuous(
+      breaks = y_breaks,
+      expand = expansion(mult = c(y_expand, y_expand))
+    ) +
     scale_x_discrete(
       drop = FALSE,
       expand = expansion(mult = c(0.25, 0.25))
@@ -285,8 +385,8 @@ make_climate_boxplot <- function(
   ggsave(
     file.path(fig_dir, paste0(file_prefix, ".png")),
     p,
-    width = 6,
-    height = 3.5,
+    width = 7,
+    height = 4.5,
     dpi = 600,
     bg = "white"
   )
@@ -347,7 +447,7 @@ ggsave(
   file.path(fig_dir, "Combined_three_parameters_by_climate_zone.png"),
   p_three_climate,
   width = 16,
-  height = 4.6,
+  height = 5,
   dpi = 600,
   bg = "white"
 )
