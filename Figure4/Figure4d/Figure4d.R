@@ -1,5 +1,5 @@
 # ============================================================
-# Plot-only code: component decomposition boxplot
+# Component decomposition boxplot with paired significance brackets and stars
 # Only reads saved site_DO_WT_decomposition_all_hours.csv
 # ============================================================
 
@@ -45,7 +45,63 @@ cat("Valid beta_exc:", sum(is.finite(site_decomp_all$beta_exc)), "\n")
 # 3. Prepare plotting data
 # ============================================================
 
-slope_long_all <- site_decomp_all %>%
+# Retain one complete triplet per site for plotting and paired tests.
+paired_df <- site_decomp_all %>%
+  select(file_name, beta_sat, beta_exc, beta_obs) %>%
+  distinct() %>%
+  filter(
+    !is.na(file_name),
+    is.finite(beta_sat), is.finite(beta_exc), is.finite(beta_obs)
+  )
+if (anyDuplicated(paired_df$file_name)) {
+  stop("同一 file_name 存在多条不同的分解记录，请先确认每站唯一记录。")
+}
+if (nrow(paired_df) < 2) stop("至少需要两个具有完整三分量的站点。")
+cat("Complete paired sites:", nrow(paired_df), "\n")
+
+component_keys <- c("beta_sat", "beta_exc", "beta_obs")
+component_labels <- c(
+  "Solubility-related\nDO change",
+  "Non-solubility \nrelated DO change",
+  "Observed\nDO change"
+)
+
+# Three two-sided paired Wilcoxon signed-rank tests.
+pairs <- combn(component_keys, 2, simplify = FALSE)
+sig_results <- purrr::map_dfr(pairs, function(pair) {
+  x <- paired_df[[pair[1]]]
+  y <- paired_df[[pair[2]]]
+  p_val <- if (all(x == y)) {
+    1
+  } else {
+    wilcox.test(
+      x, y, paired = TRUE, alternative = "two.sided",
+      exact = FALSE, correct = TRUE
+    )$p.value
+  }
+  tibble(group1 = pair[1], group2 = pair[2], n_pairs = length(x), p = p_val)
+}) %>%
+  mutate(p_adj = p.adjust(p, method = "BH"))
+if (any(!is.finite(sig_results$p_adj))) stop("检验未返回有效的 p 值。")
+print(sig_results)
+
+# Stars based on BH-adjusted p values.
+sig_results <- sig_results %>%
+  mutate(
+    sig_label = case_when(
+      p_adj < 0.001 ~ "***",
+      p_adj < 0.01 ~ "**",
+      p_adj < 0.05 ~ "*",
+      TRUE ~ "ns"
+    ),
+    x1 = match(group1, component_keys),
+    x2 = match(group2, component_keys)
+  ) %>%
+  arrange(x2 - x1, x1) %>%
+  mutate(level = row_number())
+write_csv(sig_results, file.path(fig_dir, "Component_paired_Wilcoxon_BH.csv"))
+
+slope_long_all <- paired_df %>%
   select(file_name, beta_sat, beta_exc, beta_obs) %>%
   pivot_longer(
     cols = c(beta_sat, beta_exc, beta_obs),
@@ -78,7 +134,7 @@ theme_pub <- function(base_size = 14) {
       axis.line = element_blank(),
       plot.background = element_rect(fill = "white", color = NA),
       panel.background = element_rect(fill = "white", color = NA),
-      plot.margin = margin(5, 5, 5, 5)
+      plot.margin = margin(t = 100, r = 10, b = 5, l = 5)
     )
 }
 
@@ -100,9 +156,9 @@ y_lim_manual <- c(-0.5, 2)
 y_breaks_manual <- seq(-0.5, 2, by = 0.5)
 
 # 字体大小
-x_text_size <- 16
-y_text_size <- 16
-y_title_size <- 16
+x_text_size <- 17
+y_text_size <- 18
+y_title_size <- 18
 
 # 横坐标文字角度
 x_text_angle <- 0
@@ -126,6 +182,15 @@ if (is.null(y_lim_manual)) {
 # 绘图
 # ----------------------------
 
+# Keep 12% padding within the panel; brackets are above its upper edge.
+y_span <- diff(y_lim_use)
+sig_results <- sig_results %>%
+  mutate(
+    y = y_lim_use[2] + (0.06 + (level - 1) * 0.08) * y_span,
+    y_tip = y - 0.04 * y_span,
+    star_y = y - 0.02 * y_span
+  )
+
 p_decomp <- ggplot(slope_long_all, aes(x = component, y = slope)) +
   geom_hline(
     yintercept = 0,
@@ -140,11 +205,31 @@ p_decomp <- ggplot(slope_long_all, aes(x = component, y = slope)) +
     linewidth = 0.85,
     alpha = 0.85
   ) +
-  coord_cartesian(
-    ylim = y_lim_use
+  geom_segment(
+    data = sig_results,
+    aes(x = x1, xend = x2, y = y, yend = y),
+    inherit.aes = FALSE, linewidth = 0.8, color = "black"
   ) +
+  geom_segment(
+    data = sig_results,
+    aes(x = x1, xend = x1, y = y_tip, yend = y),
+    inherit.aes = FALSE, linewidth = 0.8, color = "black"
+  ) +
+  geom_segment(
+    data = sig_results,
+    aes(x = x2, xend = x2, y = y_tip, yend = y),
+    inherit.aes = FALSE, linewidth = 0.8, color = "black"
+  ) +
+  geom_text(
+    data = sig_results,
+    aes(x = (x1 + x2) / 2, y = star_y, label = sig_label),
+    inherit.aes = FALSE,
+    size = 8, fontface = "bold", color = "black", vjust = 0
+  ) +
+  coord_cartesian(ylim = y_lim_use, clip = "off") +
   scale_y_continuous(
-    breaks = y_breaks_manual
+    breaks = y_breaks_manual,
+    expand = expansion(mult = c(0, 0))
   ) +
   labs(
     x = NULL,
@@ -175,10 +260,10 @@ print(p_decomp)
 # ============================================================
 
 ggsave(
-  file.path(fig_dir, "Component_decomposition_boxplot.png"),
-  p_decomp,
-  width = 6.2,
-  height = 4,
+  filename = "Component_decomposition_boxplot_stars.png",
+  plot = p_decomp,
+  width = 7,
+  height = 5,
   dpi = 600,
   bg = "white"
 )
