@@ -28,7 +28,7 @@ world_shp <-
   "D:/Python/R/0. paper_plog/hourly_and_data_DO/点和地图的叠加/世界地图.shp"
 
 out_dir <-
-  "DO_WT_decomposition_output/separate_maps_and_density"
+  "DO_WT_decomposition_output/separate_maps_and_density1"
 
 dir.create(
   out_dir,
@@ -640,7 +640,21 @@ make_separate_map <- function(
       mid = "white",
       high = "#fc8d59",
       midpoint = 0,
-      limits = lims,
+      
+      # b、c统一为±1.1，让±1刻度稍微缩进
+      limits = if (var %in% c("beta_exc", "gamma_exc")) {
+        c(-1.2, 1.2)
+      } else {
+        lims
+      },
+      
+      breaks = if (var %in% c("beta_exc", "gamma_exc")) {
+        c(-1, -0.5, 0, 0.5, 1)
+      } else {
+        waiver()
+      },
+      
+      labels = scales::label_number(accuracy = 0.1),
       oob = squish,
       name = legend_title
     ) +
