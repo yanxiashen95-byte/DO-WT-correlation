@@ -234,7 +234,7 @@ p <- ggplot() +
       group = site_id
     ),
     color = "grey75",
-    alpha = 0.25,
+    alpha = 0.1,
     linewidth = 0.28
   ) +
   geom_line(
@@ -250,7 +250,9 @@ p <- ggplot() +
     ylim = c(-1.05, 1.25)
   ) +
   labs(
-    x = "Solar radiation (kWh m⁻² day⁻¹)",
+    x = expression(
+      "Mean daylight solar radiation (MJ " * m^{-2} * h^{-1} * ")"
+    ),
     y = "DO–WT correlation (r)"
   ) +
   theme_classic(base_size = 14) +
